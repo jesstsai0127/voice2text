@@ -1,0 +1,6 @@
+{
+  "transcript": "今天想聊一下輝達（NVIDIA）最近發布的新一代 GPU 架構，效能比上一代提升了大約 30%。這款晶片預計會用在資料中心的 AI 訓練場景，功耗控制也做得不錯。",
+  "must_mention_any_of": [["輝達", "NVIDIA"], ["30%"]],
+  "must_not_mention": ["股價", "500美元", "買進", "賣出", "投資建議"],
+  "note": "must_mention_any_of: each inner list is one fact from the transcript; the LLM may phrase/name it differently run to run (e.g. '輝達' vs 'NVIDIA'), so any one alternative counts. must_not_mention items are facts/claims NOT present in the transcript — the organize step must never introduce them (grounding constraint from CONTEXT.md)"
+}
