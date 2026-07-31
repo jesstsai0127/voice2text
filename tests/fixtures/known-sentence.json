@@ -1,0 +1,7 @@
+{
+  "audio": "known-sentence.m4a",
+  "spoken_text": "這是一個測試的語音",
+  "expected_text_contains": ["测试", "语音"],
+  "source": "user-recorded on 2026-08-01, provided directly for this test fixture",
+  "note": "whisper-server currently outputs Simplified Chinese by default; expected values are Simplified until a Simplified->Traditional conversion step exists (tracked as a separate ticket)"
+}
