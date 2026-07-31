@@ -1,0 +1,15 @@
+services:
+  whisper-server:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    container_name: voice2text_whisper_server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - WHISPER__COMPUTE_TYPE=int8
+      - WHISPER__INFERENCE_DEVICE=cpu
+    volumes:
+      - hf-hub-cache:/home/ubuntu/.cache/huggingface/hub
+
+volumes:
+  hf-hub-cache:
