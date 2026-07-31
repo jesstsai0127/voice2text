@@ -21,8 +21,10 @@ def test_report_stays_grounded_in_transcript():
 
     assert report.strip() != ""
 
-    for must in fixture["must_mention"]:
-        assert must in report, f"expected {must!r} to appear in report, got: {report!r}"
+    for alternatives in fixture["must_mention_any_of"]:
+        assert any(alt in report for alt in alternatives), (
+            f"expected one of {alternatives!r} to appear in report, got: {report!r}"
+        )
 
     for must_not in fixture["must_not_mention"]:
         assert must_not not in report, (
