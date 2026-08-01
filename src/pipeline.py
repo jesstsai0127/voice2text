@@ -25,9 +25,9 @@ def run_episode(audio_url: str, output_dir: str) -> dict:
     with open(transcript_path, "w", encoding="utf-8") as f:
         f.write(transcript)
 
-    report = organize(transcript)
+    result = organize(transcript)
     report_path = os.path.join(output_dir, "report.md")
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report)
+        f.write(result["report"])
 
     return {"transcript_path": transcript_path, "report_path": report_path}
