@@ -2,6 +2,7 @@ import os
 
 import requests
 
+from notion_store import is_already_processed, save_record
 from organize import organize
 from transcribe import transcribe
 
@@ -14,11 +15,18 @@ def _download(url: str, dest_path: str) -> None:
                 f.write(chunk)
 
 
-def run_episode(audio_url: str, output_dir: str) -> dict:
+def run_episode(audio_url: str, output_dir: str, filename: str) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
-    audio_path = os.path.join(output_dir, "audio.mp3")
+    base_name, ext = os.path.splitext(filename)
+    extension = ext.lstrip(".")
+
+    audio_path = os.path.join(output_dir, filename)
     _download(audio_url, audio_path)
+    file_size = os.path.getsize(audio_path)
+
+    if is_already_processed(base_name, file_size, extension):
+        return {"skipped": True, "reason": "duplicate"}
 
     transcript = transcribe(audio_path)
     transcript_path = os.path.join(output_dir, "transcript.txt")
@@ -30,4 +38,18 @@ def run_episode(audio_url: str, output_dir: str) -> dict:
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(result["report"])
 
-    return {"transcript_path": transcript_path, "report_path": report_path}
+    page_id = save_record(
+        filename=base_name,
+        file_size=file_size,
+        extension=extension,
+        transcript=transcript,
+        report=result["report"],
+        tags=result["tags"],
+    )
+
+    return {
+        "skipped": False,
+        "transcript_path": transcript_path,
+        "report_path": report_path,
+        "notion_page_id": page_id,
+    }
