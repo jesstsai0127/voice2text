@@ -66,6 +66,24 @@ def _append_blocks(page_id: str, blocks: list) -> None:
         response.raise_for_status()
 
 
+def is_already_processed(filename: str, file_size: int) -> bool:
+    response = requests.post(
+        f"https://api.notion.com/v1/data_sources/{_load_secret('NOTION_DATA_SOURCE_ID')}/query",
+        headers=_headers(),
+        json={
+            "filter": {
+                "and": [
+                    {"property": "檔名", "title": {"equals": filename}},
+                    {"property": "檔案大小", "number": {"equals": file_size}},
+                ]
+            }
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return len(response.json()["results"]) > 0
+
+
 def save_record(filename: str, file_size: int, transcript: str, report: str) -> str:
     create_response = requests.post(
         "https://api.notion.com/v1/pages",
