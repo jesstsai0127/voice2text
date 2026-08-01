@@ -31,8 +31,16 @@ SYSTEM_PROMPT = """你是一個逐字稿整理助手。你會收到一份口語�
 - 輸出純 markdown，不要额外的開場白或客套話
 """
 
+TAG_SYSTEM_PROMPT = """你會收到一份口語逐字稿，任務是判斷這份內容屬於哪個/哪些領域分類。
 
-def organize(transcript: str) -> str:
+規則：
+- 分類詞彙不限於固定清單，可以自由使用最貼切的詞（例如「財經」「AI/科技」「機器人」等），但要簡短（2-6個字）
+- 一份內容可以有多個分類，也可以只有一個
+- 只回傳分類，每行一個，不要其他說明文字、不要編號、不要開場白
+"""
+
+
+def _call_ai_gateway(system_prompt: str, user_content: str) -> str:
     response = requests.post(
         _load_secret("AI_GATEWAY_URL"),
         headers={
@@ -42,11 +50,22 @@ def organize(transcript: str) -> str:
         json={
             "model": "auto",
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": transcript},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
             ],
         },
         timeout=60,
     )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
+
+
+def _classify_tags(transcript: str) -> list:
+    raw = _call_ai_gateway(TAG_SYSTEM_PROMPT, transcript)
+    return [line.strip("- \t") for line in raw.splitlines() if line.strip()]
+
+
+def organize(transcript: str) -> dict:
+    report = _call_ai_gateway(SYSTEM_PROMPT, transcript)
+    tags = _classify_tags(transcript)
+    return {"report": report, "tags": tags}
