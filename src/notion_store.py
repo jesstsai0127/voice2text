@@ -66,7 +66,7 @@ def _append_blocks(page_id: str, blocks: list) -> None:
         response.raise_for_status()
 
 
-def is_already_processed(filename: str, file_size: int) -> bool:
+def is_already_processed(filename: str, file_size: int, extension: str) -> bool:
     response = requests.post(
         f"https://api.notion.com/v1/data_sources/{_load_secret('NOTION_DATA_SOURCE_ID')}/query",
         headers=_headers(),
@@ -75,16 +75,48 @@ def is_already_processed(filename: str, file_size: int) -> bool:
                 "and": [
                     {"property": "檔名", "title": {"equals": filename}},
                     {"property": "檔案大小", "number": {"equals": file_size}},
+                    {"property": "副檔名", "rich_text": {"equals": extension}},
                 ]
             }
         },
         timeout=60,
     )
     response.raise_for_status()
-    return len(response.json()["results"]) > 0
+    results = response.json()["results"]
+    if not results:
+        return False
+
+    for existing in results:
+        current_count = (
+            existing["properties"].get("重複偵測次數", {}).get("number") or 0
+        )
+        update_response = requests.patch(
+            f"https://api.notion.com/v1/pages/{existing['id']}",
+            headers=_headers(),
+            json={"properties": {"重複偵測次數": {"number": current_count + 1}}},
+            timeout=60,
+        )
+        update_response.raise_for_status()
+
+    return True
 
 
-def save_record(filename: str, file_size: int, transcript: str, report: str) -> str:
+def save_record(
+    filename: str,
+    file_size: int,
+    extension: str,
+    transcript: str,
+    report: str,
+    tags: list = None,
+) -> str:
+    properties = {
+        "檔名": {"title": [{"type": "text", "text": {"content": filename}}]},
+        "檔案大小": {"number": file_size},
+        "副檔名": {"rich_text": [{"type": "text", "text": {"content": extension}}]},
+    }
+    if tags:
+        properties["分類"] = {"multi_select": [{"name": tag} for tag in tags]}
+
     create_response = requests.post(
         "https://api.notion.com/v1/pages",
         headers=_headers(),
@@ -93,10 +125,7 @@ def save_record(filename: str, file_size: int, transcript: str, report: str) -> 
                 "type": "data_source_id",
                 "data_source_id": _load_secret("NOTION_DATA_SOURCE_ID"),
             },
-            "properties": {
-                "檔名": {"title": [{"type": "text", "text": {"content": filename}}]},
-                "檔案大小": {"number": file_size},
-            },
+            "properties": properties,
         },
         timeout=60,
     )
@@ -124,6 +153,10 @@ def fetch_record(page_id: str) -> dict:
     props = page_response.json()["properties"]
     filename = props["檔名"]["title"][0]["plain_text"] if props["檔名"]["title"] else ""
     file_size = props["檔案大小"]["number"]
+    extension_rt = props["副檔名"]["rich_text"]
+    extension = extension_rt[0]["plain_text"] if extension_rt else ""
+    duplicate_count = props.get("重複偵測次數", {}).get("number") or 0
+    tags = [t["name"] for t in props.get("分類", {}).get("multi_select", [])]
 
     blocks_response = requests.get(
         f"https://api.notion.com/v1/blocks/{page_id}/children",
@@ -151,6 +184,9 @@ def fetch_record(page_id: str) -> dict:
     return {
         "filename": filename,
         "file_size": file_size,
+        "extension": extension,
+        "duplicate_count": duplicate_count,
+        "tags": tags,
         "transcript": "".join(sections["逐字稿"]),
         "report": "".join(sections["整理報告"]),
     }
