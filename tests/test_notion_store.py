@@ -23,16 +23,19 @@ def _archive(page_id: str) -> None:
 
 
 def test_save_record_round_trips_through_notion():
-    unique_filename = f"test-{uuid.uuid4().hex[:8]}.mp3"
+    unique_filename = f"test-{uuid.uuid4().hex[:8]}"
     file_size = 12345
+    extension = "mp3"
     transcript = "這是一份測試逐字稿，用來驗證 Notion 儲存有沒有正確存進去。"
     report = "- 測試重點一\n- 測試重點二"
 
     page_id = save_record(
         filename=unique_filename,
         file_size=file_size,
+        extension=extension,
         transcript=transcript,
         report=report,
+        tags=["測試分類"],
     )
 
     try:
@@ -40,6 +43,8 @@ def test_save_record_round_trips_through_notion():
 
         assert record["filename"] == unique_filename
         assert record["file_size"] == file_size
+        assert record["extension"] == extension
+        assert record["tags"] == ["測試分類"]
         assert transcript in record["transcript"]
         assert report in record["report"]
     finally:
