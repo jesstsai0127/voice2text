@@ -17,7 +17,8 @@ def _load_fixture(name):
 def test_report_stays_grounded_in_transcript():
     fixture = _load_fixture("nvidia-transcript")
 
-    report = organize(fixture["transcript"])
+    result = organize(fixture["transcript"])
+    report = result["report"]
 
     assert report.strip() != ""
 
@@ -30,3 +31,14 @@ def test_report_stays_grounded_in_transcript():
         assert must_not not in report, (
             f"{must_not!r} should not appear (not in transcript) but was found in report: {report!r}"
         )
+
+
+def test_tech_content_gets_tagged_as_ai_tech():
+    fixture = _load_fixture("nvidia-transcript")
+
+    result = organize(fixture["transcript"])
+
+    assert len(result["tags"]) > 0
+    assert any(
+        "AI" in tag or "科技" in tag for tag in result["tags"]
+    ), f"expected an AI/tech-ish tag, got: {result['tags']!r}"
