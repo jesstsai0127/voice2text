@@ -1,0 +1,18 @@
+[Unit]
+Description=voice2text daily trigger server (HTTP wrapper for run_daily)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=framework
+WorkingDirectory=/home/framework/projects/voice2text
+Environment=PYTHONPATH=/home/framework/projects/voice2text/src
+Environment=VOICE2TEXT_TRIGGER_PORT=8100
+Environment=VOICE2TEXT_OUTPUT_DIR=/home/framework/voice2text-runs
+ExecStart=/usr/bin/python3 /home/framework/projects/voice2text/src/trigger_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
