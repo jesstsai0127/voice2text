@@ -31,6 +31,25 @@ def resolve_feed_url(url: str) -> str:
     return results[0]["feedUrl"]
 
 
+def _episode_from_item(item) -> dict:
+    title = item.find("title").text or ""
+    enclosure = item.find("enclosure")
+    audio_url = enclosure.attrib["url"]
+    published_at = parsedate_to_datetime(item.find("pubDate").text)
+
+    # enclosure URLs here are firstory redirect wrappers ending in the real
+    # filename, URL-encoded as part of the path — recover a usable filename.
+    decoded_path = unquote(audio_url)
+    filename = os.path.basename(urlparse(decoded_path).path)
+
+    return {
+        "title": title,
+        "audio_url": audio_url,
+        "filename": filename,
+        "published_at": published_at.isoformat(),
+    }
+
+
 def find_latest_episode(feed_url: str) -> dict:
     response = requests.get(feed_url, timeout=30)
     response.raise_for_status()
@@ -42,13 +61,14 @@ def find_latest_episode(feed_url: str) -> dict:
         key=lambda item: parsedate_to_datetime(item.find("pubDate").text),
     )
 
-    title = latest.find("title").text or ""
-    enclosure = latest.find("enclosure")
-    audio_url = enclosure.attrib["url"]
+    return _episode_from_item(latest)
 
-    # enclosure URLs here are firstory redirect wrappers ending in the real
-    # filename, URL-encoded as part of the path — recover a usable filename.
-    decoded_path = unquote(audio_url)
-    filename = os.path.basename(urlparse(decoded_path).path)
 
-    return {"title": title, "audio_url": audio_url, "filename": filename}
+def find_all_episodes(feed_url: str) -> list:
+    response = requests.get(feed_url, timeout=30)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+
+    episodes = [_episode_from_item(item) for item in root.findall(".//item")]
+    episodes.sort(key=lambda e: e["published_at"], reverse=True)
+    return episodes
