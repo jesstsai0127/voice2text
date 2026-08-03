@@ -7,8 +7,10 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from notion_store import _headers
+from notion_store import _headers, get_or_create_show_database
 from pipeline import run_episode
+
+TECHWAV_FEED_PAGE_ID = "3affa664-385e-81ff-8289-d33381432318"  # 哈利說 科技浪 Tech.wav
 
 # 哈利說「科技浪 Tech.wav」EP1 -（試播集）全世界一起做了一個美夢
 # Enclosure URL resolved manually via the show's RSS feed for this tracer-bullet
@@ -35,8 +37,11 @@ def test_ep1_end_to_end_produces_transcript_and_report(tmp_path):
     # unique filename per run so re-running this (deliberately, not via the
     # default gate) doesn't get skipped as a duplicate of a prior run
     filename = f"ep1-{uuid.uuid4().hex[:8]}.mp3"
+    data_source_id = get_or_create_show_database(TECHWAV_FEED_PAGE_ID, "哈利說 科技浪 Tech.wav")
 
-    result = run_episode(EP1_AUDIO_URL, str(tmp_path), filename=filename)
+    result = run_episode(
+        EP1_AUDIO_URL, str(tmp_path), filename=filename, data_source_id=data_source_id
+    )
 
     try:
         assert result["skipped"] is False
