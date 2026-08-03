@@ -12,6 +12,7 @@ from notion_store import (
     fetch_record,
     get_or_create_show_database,
     is_already_processed,
+    is_filename_recorded,
     save_record,
 )
 
@@ -74,6 +75,35 @@ def test_processed_source_is_detected_and_new_one_is_not():
         assert (
             is_already_processed(data_source_id, filename, file_size + 1, extension) is False
         )
+    finally:
+        _archive(page_id)
+        _archive(feed_page_id)
+
+
+def test_is_filename_recorded_ignores_file_size_for_a_cheap_precheck():
+    feed_page_id = _create_test_tracked_feed(f"測試節目-{uuid.uuid4().hex[:6]}")
+    data_source_id = get_or_create_show_database(feed_page_id, "測試節目")
+
+    filename = f"recorded-check-{uuid.uuid4().hex[:8]}"
+    extension = "mp3"
+
+    assert is_filename_recorded(data_source_id, filename, extension) is False
+
+    page_id = save_record(
+        data_source_id=data_source_id,
+        filename=filename,
+        file_size=12345,
+        extension=extension,
+        transcript="t",
+        report="r",
+    )
+
+    try:
+        # true even though we never pass/compare a file_size here — this is
+        # meant as a cheap no-download pre-check for RSS-sourced episodes
+        # where the feed doesn't reliably report a real file size
+        assert is_filename_recorded(data_source_id, filename, extension) is True
+        assert is_filename_recorded(data_source_id, filename, "wav") is False
     finally:
         _archive(page_id)
         _archive(feed_page_id)

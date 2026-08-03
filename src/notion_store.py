@@ -71,6 +71,7 @@ _SHOW_DATABASE_SCHEMA = {
     "檔案大小": {"number": {}},
     "副檔名": {"rich_text": {}},
     "標題": {"rich_text": {}},
+    "發布日期": {"date": {}},
     "狀態": {"status": {}},
     "分類": {"multi_select": {}},
     "重複偵測次數": {"number": {}},
@@ -154,12 +155,34 @@ def is_already_processed(data_source_id: str, filename: str, file_size: int, ext
     return True
 
 
+def is_filename_recorded(data_source_id: str, filename: str, extension: str) -> bool:
+    """Cheap pre-check by filename+extension only, no file_size comparison —
+    for RSS-sourced episodes whose feed doesn't reliably report a real file
+    size, so callers can skip a download without needing one first."""
+    response = requests.post(
+        f"https://api.notion.com/v1/data_sources/{data_source_id}/query",
+        headers=_headers(),
+        json={
+            "filter": {
+                "and": [
+                    {"property": "檔名", "title": {"equals": filename}},
+                    {"property": "副檔名", "rich_text": {"equals": extension}},
+                ]
+            }
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return bool(response.json()["results"])
+
+
 def _record_properties(
     filename: str,
     file_size: int,
     extension: str,
     tags: list,
     title: str = None,
+    published_at: str = None,
 ) -> dict:
     properties = {
         "檔名": {"title": [{"type": "text", "text": {"content": filename}}]},
@@ -171,6 +194,8 @@ def _record_properties(
         properties["分類"] = {"multi_select": [{"name": tag} for tag in tags]}
     if title:
         properties["標題"] = {"rich_text": [{"type": "text", "text": {"content": title}}]}
+    if published_at:
+        properties["發布日期"] = {"date": {"start": published_at}}
     return properties
 
 
@@ -183,6 +208,7 @@ def save_record(
     report: str,
     tags: list = None,
     title: str = None,
+    published_at: str = None,
 ) -> str:
     create_response = requests.post(
         "https://api.notion.com/v1/pages",
@@ -192,7 +218,9 @@ def save_record(
                 "type": "data_source_id",
                 "data_source_id": data_source_id,
             },
-            "properties": _record_properties(filename, file_size, extension, tags, title),
+            "properties": _record_properties(
+                filename, file_size, extension, tags, title, published_at
+            ),
         },
         timeout=60,
     )
@@ -219,11 +247,16 @@ def update_record(
     report: str,
     tags: list = None,
     title: str = None,
+    published_at: str = None,
 ) -> None:
     update_response = requests.patch(
         f"https://api.notion.com/v1/pages/{page_id}",
         headers=_headers(),
-        json={"properties": _record_properties(filename, file_size, extension, tags, title)},
+        json={
+            "properties": _record_properties(
+                filename, file_size, extension, tags, title, published_at
+            )
+        },
         timeout=60,
     )
     update_response.raise_for_status()
@@ -284,6 +317,7 @@ def fetch_record(page_id: str) -> dict:
     tags = [t["name"] for t in props.get("分類", {}).get("multi_select", [])]
     title_rt = props.get("標題", {}).get("rich_text", [])
     title = title_rt[0]["plain_text"] if title_rt else ""
+    published_at = (props.get("發布日期", {}).get("date") or {}).get("start")
 
     blocks_response = requests.get(
         f"https://api.notion.com/v1/blocks/{page_id}/children",
@@ -315,6 +349,7 @@ def fetch_record(page_id: str) -> dict:
         "duplicate_count": duplicate_count,
         "tags": tags,
         "title": title,
+        "published_at": published_at,
         "transcript": "".join(sections["逐字稿"]),
         "report": "".join(sections["整理報告"]),
     }
