@@ -83,6 +83,8 @@ def test_save_record_round_trips_through_notion():
     transcript = "這是一份測試逐字稿，用來驗證 Notion 儲存有沒有正確存進去。"
     report = "- 測試重點一\n- 測試重點二"
 
+    published_at = "2026-08-01T12:00:00+08:00"
+
     page_id = save_record(
         data_source_id=data_source_id,
         filename=unique_filename,
@@ -92,6 +94,7 @@ def test_save_record_round_trips_through_notion():
         report=report,
         tags=["測試分類"],
         title=title,
+        published_at=published_at,
     )
 
     try:
@@ -102,6 +105,7 @@ def test_save_record_round_trips_through_notion():
         assert record["extension"] == extension
         assert record["tags"] == ["測試分類"]
         assert record["title"] == title
+        assert record["published_at"].startswith("2026-08-01")
         assert transcript in record["transcript"]
         assert report in record["report"]
     finally:

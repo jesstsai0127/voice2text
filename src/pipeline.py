@@ -35,6 +35,7 @@ def run_episode(
     filename: str,
     data_source_id: str,
     title: str = None,
+    published_at: str = None,
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -64,6 +65,7 @@ def run_episode(
         report=result["report"],
         tags=result["tags"],
         title=title,
+        published_at=published_at,
     )
 
     return {

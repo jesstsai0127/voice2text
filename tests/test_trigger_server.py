@@ -38,3 +38,59 @@ def test_run_daily_endpoint_returns_immediately_and_runs_in_background():
             assert calls == ["/tmp/voice2text-test"]
         finally:
             server.shutdown()
+
+
+def test_run_backfill_endpoint_returns_immediately_and_runs_in_background():
+    calls = []
+
+    def fake_run_podcast_backfill(output_dir):
+        calls.append(output_dir)
+        time.sleep(0.5)
+        return []
+
+    with patch("trigger_server.run_podcast_backfill", side_effect=fake_run_podcast_backfill):
+        server = trigger_server.make_server(port=0, output_dir="/tmp/voice2text-test")
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            start = time.time()
+            response = requests.post(f"http://127.0.0.1:{port}/run-backfill", timeout=5)
+            elapsed = time.time() - start
+
+            assert response.status_code == 202
+            assert elapsed < 0.3
+
+            time.sleep(0.7)
+            assert calls == ["/tmp/voice2text-test"]
+        finally:
+            server.shutdown()
+
+
+def test_run_personal_uploads_endpoint_returns_immediately_and_runs_in_background():
+    calls = []
+
+    def fake_run_personal_uploads(output_dir):
+        calls.append(output_dir)
+        time.sleep(0.5)
+        return []
+
+    with patch("trigger_server.run_personal_uploads", side_effect=fake_run_personal_uploads):
+        server = trigger_server.make_server(port=0, output_dir="/tmp/voice2text-test")
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            start = time.time()
+            response = requests.post(
+                f"http://127.0.0.1:{port}/run-personal-uploads", timeout=5
+            )
+            elapsed = time.time() - start
+
+            assert response.status_code == 202
+            assert elapsed < 0.3
+
+            time.sleep(0.7)
+            assert calls == ["/tmp/voice2text-test"]
+        finally:
+            server.shutdown()

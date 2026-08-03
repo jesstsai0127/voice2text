@@ -2,19 +2,26 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from daily_run import run_daily
+from daily_run import run_daily, run_personal_uploads, run_podcast_backfill
+
+_ROUTES = {
+    "/run-daily": lambda: run_daily,
+    "/run-backfill": lambda: run_podcast_backfill,
+    "/run-personal-uploads": lambda: run_personal_uploads,
+}
 
 
 def make_server(port: int, output_dir: str) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            if self.path != "/run-daily":
+            route = _ROUTES.get(self.path)
+            if route is None:
                 self.send_response(404)
                 self.end_headers()
                 return
 
             threading.Thread(
-                target=run_daily, args=(output_dir,), daemon=True
+                target=route(), args=(output_dir,), daemon=True
             ).start()
 
             self.send_response(202)
