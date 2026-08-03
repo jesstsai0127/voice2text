@@ -33,8 +33,8 @@ def run_episode(
     audio_url: str,
     output_dir: str,
     filename: str,
+    data_source_id: str,
     title: str = None,
-    source_page_id: str = None,
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -45,7 +45,7 @@ def run_episode(
     _download(audio_url, audio_path)
     file_size = os.path.getsize(audio_path)
 
-    if is_already_processed(base_name, file_size, extension):
+    if is_already_processed(data_source_id, base_name, file_size, extension):
         return {"skipped": True, "reason": "duplicate"}
 
     transcript, result, transcript_path, report_path = _transcribe_and_organize(
@@ -53,6 +53,7 @@ def run_episode(
     )
 
     page_id = save_record(
+        data_source_id=data_source_id,
         filename=base_name,
         file_size=file_size,
         extension=extension,
@@ -60,7 +61,6 @@ def run_episode(
         report=result["report"],
         tags=result["tags"],
         title=title,
-        source_page_id=source_page_id,
     )
 
     return {
@@ -72,7 +72,7 @@ def run_episode(
 
 
 def process_pending_upload(
-    page_id: str, file_url: str, filename: str, output_dir: str
+    page_id: str, file_url: str, filename: str, output_dir: str, data_source_id: str
 ) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -83,7 +83,7 @@ def process_pending_upload(
     _download(file_url, audio_path)
     file_size = os.path.getsize(audio_path)
 
-    if is_already_processed(base_name, file_size, extension):
+    if is_already_processed(data_source_id, base_name, file_size, extension):
         return {"skipped": True, "reason": "duplicate"}
 
     transcript, result, transcript_path, report_path = _transcribe_and_organize(
