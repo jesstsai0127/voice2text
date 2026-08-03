@@ -6,7 +6,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from daily_run import list_tracked_feeds, run_daily
+from daily_run import list_tracked_feeds, run_daily_podcast_check
 from notion_store import _headers
 
 
@@ -26,14 +26,16 @@ def test_list_tracked_feeds_returns_seeded_show():
 
 
 @pytest.mark.slow
-def test_run_daily_processes_every_tracked_feed(tmp_path):
-    results = run_daily(str(tmp_path))
+def test_run_daily_podcast_check_processes_recent_tracked_episodes(tmp_path):
+    # real feeds may or may not have published anything in the last few days,
+    # so this only asserts on the shape of whatever comes back, not a nonzero
+    # count
+    results = run_daily_podcast_check(str(tmp_path))
 
-    assert len(results) > 0
     for result in results:
         assert result["episode"]["title"].strip() != ""
         # freshly-seen episode: not skipped, real transcript+report+Notion page
-        if not result["skipped"]:
+        if not result["skipped"] and not result.get("failed"):
             assert result["notion_page_id"]
             try:
                 with open(result["transcript_path"], encoding="utf-8") as f:

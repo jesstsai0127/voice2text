@@ -5,7 +5,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from daily_run import run_daily
+from daily_run import run_personal_uploads
 from notion_store import _headers, get_or_create_show_database
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -73,9 +73,7 @@ def _archive(page_id: str) -> None:
     response.raise_for_status()
 
 
-def test_run_daily_also_processes_pending_personal_uploads(tmp_path, monkeypatch):
-    # keep this test fast/isolated: skip the real podcast-feed sweep, only
-    # exercise the personal-upload half of run_daily()
+def test_run_personal_uploads_processes_pending_uploads(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "daily_run.list_tracked_feeds",
         lambda: [
@@ -87,11 +85,12 @@ def test_run_daily_also_processes_pending_personal_uploads(tmp_path, monkeypatch
             }
         ],
     )
+    monkeypatch.setenv("VOICE2TEXT_LOCK_PATH", str(tmp_path / "job.lock"))
 
     page_id = _simulate_manual_upload("known-sentence.m4a")
 
     try:
-        results = run_daily(str(tmp_path))
+        results = run_personal_uploads(str(tmp_path))
 
         matching = [r for r in results if r.get("notion_page_id") == page_id]
         assert len(matching) == 1
