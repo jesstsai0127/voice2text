@@ -1,17 +1,43 @@
 import os
 import sys
+import uuid
 
 import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from notion_store import _headers, _load_secret, fetch_record, list_pending_uploads
+from notion_store import (
+    _headers,
+    _load_secret,
+    fetch_record,
+    get_or_create_show_database,
+    list_pending_uploads,
+)
 from pipeline import process_pending_upload
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-def _simulate_manual_upload(filename: str) -> str:
+def _create_test_tracked_feed(name: str) -> str:
+    response = requests.post(
+        "https://api.notion.com/v1/pages",
+        headers=_headers(),
+        json={
+            "parent": {
+                "type": "data_source_id",
+                "data_source_id": _load_secret("NOTION_FEEDS_DATA_SOURCE_ID"),
+            },
+            "properties": {
+                "名稱": {"title": [{"type": "text", "text": {"content": name}}]},
+            },
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["id"]
+
+
+def _simulate_manual_upload(filename: str, data_source_id: str) -> str:
     upload = requests.post(
         "https://api.notion.com/v1/file_uploads",
         headers=_headers(),
@@ -40,7 +66,7 @@ def _simulate_manual_upload(filename: str) -> str:
         json={
             "parent": {
                 "type": "data_source_id",
-                "data_source_id": _load_secret("NOTION_DATA_SOURCE_ID"),
+                "data_source_id": data_source_id,
             },
             "properties": {
                 "音檔": {
@@ -71,10 +97,12 @@ def _archive(page_id: str) -> None:
 
 
 def test_process_pending_upload_updates_the_same_row(tmp_path):
-    page_id = _simulate_manual_upload("known-sentence.m4a")
+    feed_page_id = _create_test_tracked_feed(f"測試節目-{uuid.uuid4().hex[:6]}")
+    data_source_id = get_or_create_show_database(feed_page_id, "測試節目")
+    page_id = _simulate_manual_upload("known-sentence.m4a", data_source_id)
 
     try:
-        pending = [p for p in list_pending_uploads() if p["page_id"] == page_id]
+        pending = [p for p in list_pending_uploads(data_source_id) if p["page_id"] == page_id]
         assert len(pending) == 1
 
         result = process_pending_upload(
@@ -82,6 +110,7 @@ def test_process_pending_upload_updates_the_same_row(tmp_path):
             file_url=pending[0]["file_url"],
             filename=pending[0]["filename"],
             output_dir=str(tmp_path),
+            data_source_id=data_source_id,
         )
 
         assert result["skipped"] is False
@@ -93,7 +122,10 @@ def test_process_pending_upload_updates_the_same_row(tmp_path):
         assert record["transcript"] != ""
         assert record["report"] != ""
 
-        still_pending = [p for p in list_pending_uploads() if p["page_id"] == page_id]
+        still_pending = [
+            p for p in list_pending_uploads(data_source_id) if p["page_id"] == page_id
+        ]
         assert still_pending == []
     finally:
         _archive(page_id)
+        _archive(feed_page_id)
