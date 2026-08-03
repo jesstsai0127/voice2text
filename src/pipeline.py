@@ -4,7 +4,7 @@ import requests
 
 from notion_store import is_already_processed, save_record, update_record
 from organize import organize
-from transcribe import transcribe
+from transcribe import TranscriptionFailedError, transcribe
 
 
 def _download(url: str, dest_path: str) -> None:
@@ -48,9 +48,12 @@ def run_episode(
     if is_already_processed(data_source_id, base_name, file_size, extension):
         return {"skipped": True, "reason": "duplicate"}
 
-    transcript, result, transcript_path, report_path = _transcribe_and_organize(
-        audio_path, output_dir
-    )
+    try:
+        transcript, result, transcript_path, report_path = _transcribe_and_organize(
+            audio_path, output_dir
+        )
+    except TranscriptionFailedError as e:
+        return {"skipped": False, "failed": True, "error": str(e)}
 
     page_id = save_record(
         data_source_id=data_source_id,
@@ -86,9 +89,12 @@ def process_pending_upload(
     if is_already_processed(data_source_id, base_name, file_size, extension):
         return {"skipped": True, "reason": "duplicate"}
 
-    transcript, result, transcript_path, report_path = _transcribe_and_organize(
-        audio_path, output_dir
-    )
+    try:
+        transcript, result, transcript_path, report_path = _transcribe_and_organize(
+            audio_path, output_dir
+        )
+    except TranscriptionFailedError as e:
+        return {"skipped": False, "failed": True, "error": str(e)}
 
     update_record(
         page_id=page_id,
