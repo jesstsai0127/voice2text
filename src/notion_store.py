@@ -66,9 +66,62 @@ def _append_blocks(page_id: str, blocks: list) -> None:
         response.raise_for_status()
 
 
-def is_already_processed(filename: str, file_size: int, extension: str) -> bool:
+_SHOW_DATABASE_SCHEMA = {
+    "檔名": {"title": {}},
+    "檔案大小": {"number": {}},
+    "副檔名": {"rich_text": {}},
+    "標題": {"rich_text": {}},
+    "狀態": {"status": {}},
+    "分類": {"multi_select": {}},
+    "重複偵測次數": {"number": {}},
+    "音檔": {"files": {}},
+}
+
+
+def get_or_create_show_database(feed_page_id: str, name: str) -> str:
+    page_response = requests.get(
+        f"https://api.notion.com/v1/pages/{feed_page_id}",
+        headers=_headers(),
+        timeout=60,
+    )
+    page_response.raise_for_status()
+    existing = page_response.json()["properties"]["集數資料庫ID"]["rich_text"]
+    if existing:
+        return existing[0]["plain_text"]
+
+    create_response = requests.post(
+        "https://api.notion.com/v1/databases",
+        headers=_headers(),
+        json={
+            "parent": {"type": "page_id", "page_id": feed_page_id},
+            "title": [{"type": "text", "text": {"content": name}}],
+            "initial_data_source": {"properties": _SHOW_DATABASE_SCHEMA},
+        },
+        timeout=60,
+    )
+    create_response.raise_for_status()
+    data_source_id = create_response.json()["data_sources"][0]["id"]
+
+    update_response = requests.patch(
+        f"https://api.notion.com/v1/pages/{feed_page_id}",
+        headers=_headers(),
+        json={
+            "properties": {
+                "集數資料庫ID": {
+                    "rich_text": [{"type": "text", "text": {"content": data_source_id}}]
+                }
+            }
+        },
+        timeout=60,
+    )
+    update_response.raise_for_status()
+
+    return data_source_id
+
+
+def is_already_processed(data_source_id: str, filename: str, file_size: int, extension: str) -> bool:
     response = requests.post(
-        f"https://api.notion.com/v1/data_sources/{_load_secret('NOTION_DATA_SOURCE_ID')}/query",
+        f"https://api.notion.com/v1/data_sources/{data_source_id}/query",
         headers=_headers(),
         json={
             "filter": {
@@ -107,7 +160,6 @@ def _record_properties(
     extension: str,
     tags: list,
     title: str = None,
-    source_page_id: str = None,
 ) -> dict:
     properties = {
         "檔名": {"title": [{"type": "text", "text": {"content": filename}}]},
@@ -119,12 +171,11 @@ def _record_properties(
         properties["分類"] = {"multi_select": [{"name": tag} for tag in tags]}
     if title:
         properties["標題"] = {"rich_text": [{"type": "text", "text": {"content": title}}]}
-    if source_page_id:
-        properties["來源"] = {"relation": [{"id": source_page_id}]}
     return properties
 
 
 def save_record(
+    data_source_id: str,
     filename: str,
     file_size: int,
     extension: str,
@@ -132,7 +183,6 @@ def save_record(
     report: str,
     tags: list = None,
     title: str = None,
-    source_page_id: str = None,
 ) -> str:
     create_response = requests.post(
         "https://api.notion.com/v1/pages",
@@ -140,11 +190,9 @@ def save_record(
         json={
             "parent": {
                 "type": "data_source_id",
-                "data_source_id": _load_secret("NOTION_DATA_SOURCE_ID"),
+                "data_source_id": data_source_id,
             },
-            "properties": _record_properties(
-                filename, file_size, extension, tags, title, source_page_id
-            ),
+            "properties": _record_properties(filename, file_size, extension, tags, title),
         },
         timeout=60,
     )
@@ -171,16 +219,11 @@ def update_record(
     report: str,
     tags: list = None,
     title: str = None,
-    source_page_id: str = None,
 ) -> None:
     update_response = requests.patch(
         f"https://api.notion.com/v1/pages/{page_id}",
         headers=_headers(),
-        json={
-            "properties": _record_properties(
-                filename, file_size, extension, tags, title, source_page_id
-            )
-        },
+        json={"properties": _record_properties(filename, file_size, extension, tags, title)},
         timeout=60,
     )
     update_response.raise_for_status()
@@ -194,9 +237,9 @@ def update_record(
     _append_blocks(page_id, blocks)
 
 
-def list_pending_uploads() -> list:
+def list_pending_uploads(data_source_id: str) -> list:
     response = requests.post(
-        f"https://api.notion.com/v1/data_sources/{_load_secret('NOTION_DATA_SOURCE_ID')}/query",
+        f"https://api.notion.com/v1/data_sources/{data_source_id}/query",
         headers=_headers(),
         json={
             "filter": {
@@ -241,8 +284,6 @@ def fetch_record(page_id: str) -> dict:
     tags = [t["name"] for t in props.get("分類", {}).get("multi_select", [])]
     title_rt = props.get("標題", {}).get("rich_text", [])
     title = title_rt[0]["plain_text"] if title_rt else ""
-    source_relations = props.get("來源", {}).get("relation", [])
-    source_page_id = source_relations[0]["id"] if source_relations else None
 
     blocks_response = requests.get(
         f"https://api.notion.com/v1/blocks/{page_id}/children",
@@ -274,7 +315,6 @@ def fetch_record(page_id: str) -> dict:
         "duplicate_count": duplicate_count,
         "tags": tags,
         "title": title,
-        "source_page_id": source_page_id,
         "transcript": "".join(sections["逐字稿"]),
         "report": "".join(sections["整理報告"]),
     }
