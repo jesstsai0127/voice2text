@@ -15,9 +15,12 @@ def test_list_tracked_feeds_returns_seeded_show():
 
     assert len(feeds) > 0
     assert any(
-        "feed.firstory.me/rss/user/cm3o5681s06e801v3fxpjehwb" in url
-        for url in feeds
+        "feed.firstory.me/rss/user/cm3o5681s06e801v3fxpjehwb" in feed["url"]
+        for feed in feeds
     )
+    # every feed carries its own Notion page id, so processed episodes can
+    # be linked back to which tracked show they came from
+    assert all(feed["page_id"] for feed in feeds)
 
 
 @pytest.mark.slow

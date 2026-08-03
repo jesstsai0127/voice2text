@@ -2,7 +2,7 @@ import os
 
 import requests
 
-from notion_store import is_already_processed, save_record
+from notion_store import is_already_processed, save_record, update_record
 from organize import organize
 from transcribe import transcribe
 
@@ -15,7 +15,27 @@ def _download(url: str, dest_path: str) -> None:
                 f.write(chunk)
 
 
-def run_episode(audio_url: str, output_dir: str, filename: str) -> dict:
+def _transcribe_and_organize(audio_path: str, output_dir: str) -> tuple:
+    transcript = transcribe(audio_path)
+    transcript_path = os.path.join(output_dir, "transcript.txt")
+    with open(transcript_path, "w", encoding="utf-8") as f:
+        f.write(transcript)
+
+    result = organize(transcript)
+    report_path = os.path.join(output_dir, "report.md")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(result["report"])
+
+    return transcript, result, transcript_path, report_path
+
+
+def run_episode(
+    audio_url: str,
+    output_dir: str,
+    filename: str,
+    title: str = None,
+    source_page_id: str = None,
+) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
     base_name, ext = os.path.splitext(filename)
@@ -28,17 +48,50 @@ def run_episode(audio_url: str, output_dir: str, filename: str) -> dict:
     if is_already_processed(base_name, file_size, extension):
         return {"skipped": True, "reason": "duplicate"}
 
-    transcript = transcribe(audio_path)
-    transcript_path = os.path.join(output_dir, "transcript.txt")
-    with open(transcript_path, "w", encoding="utf-8") as f:
-        f.write(transcript)
-
-    result = organize(transcript)
-    report_path = os.path.join(output_dir, "report.md")
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(result["report"])
+    transcript, result, transcript_path, report_path = _transcribe_and_organize(
+        audio_path, output_dir
+    )
 
     page_id = save_record(
+        filename=base_name,
+        file_size=file_size,
+        extension=extension,
+        transcript=transcript,
+        report=result["report"],
+        tags=result["tags"],
+        title=title,
+        source_page_id=source_page_id,
+    )
+
+    return {
+        "skipped": False,
+        "transcript_path": transcript_path,
+        "report_path": report_path,
+        "notion_page_id": page_id,
+    }
+
+
+def process_pending_upload(
+    page_id: str, file_url: str, filename: str, output_dir: str
+) -> dict:
+    os.makedirs(output_dir, exist_ok=True)
+
+    base_name, ext = os.path.splitext(filename)
+    extension = ext.lstrip(".")
+
+    audio_path = os.path.join(output_dir, filename)
+    _download(file_url, audio_path)
+    file_size = os.path.getsize(audio_path)
+
+    if is_already_processed(base_name, file_size, extension):
+        return {"skipped": True, "reason": "duplicate"}
+
+    transcript, result, transcript_path, report_path = _transcribe_and_organize(
+        audio_path, output_dir
+    )
+
+    update_record(
+        page_id=page_id,
         filename=base_name,
         file_size=file_size,
         extension=extension,
