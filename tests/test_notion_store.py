@@ -22,10 +22,14 @@ def _archive(page_id: str) -> None:
     response.raise_for_status()
 
 
+TECHWAV_FEED_PAGE_ID = "3affa664-385e-81ff-8289-d33381432318"  # 哈利說 科技浪 Tech.wav
+
+
 def test_save_record_round_trips_through_notion():
     unique_filename = f"test-{uuid.uuid4().hex[:8]}"
     file_size = 12345
     extension = "mp3"
+    title = "EP999 - 測試集數標題"
     transcript = "這是一份測試逐字稿，用來驗證 Notion 儲存有沒有正確存進去。"
     report = "- 測試重點一\n- 測試重點二"
 
@@ -36,6 +40,8 @@ def test_save_record_round_trips_through_notion():
         transcript=transcript,
         report=report,
         tags=["測試分類"],
+        title=title,
+        source_page_id=TECHWAV_FEED_PAGE_ID,
     )
 
     try:
@@ -45,6 +51,8 @@ def test_save_record_round_trips_through_notion():
         assert record["file_size"] == file_size
         assert record["extension"] == extension
         assert record["tags"] == ["測試分類"]
+        assert record["title"] == title
+        assert record["source_page_id"] == TECHWAV_FEED_PAGE_ID
         assert transcript in record["transcript"]
         assert report in record["report"]
     finally:
