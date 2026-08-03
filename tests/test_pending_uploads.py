@@ -1,5 +1,6 @@
 import os
 import sys
+import uuid
 
 import requests
 
@@ -8,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from notion_store import (
     _headers,
     _load_secret,
+    get_or_create_show_database,
     list_pending_uploads,
     update_record,
 )
@@ -15,7 +17,26 @@ from notion_store import (
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-def _simulate_manual_upload(filename: str) -> str:
+def _create_test_tracked_feed(name: str) -> str:
+    response = requests.post(
+        "https://api.notion.com/v1/pages",
+        headers=_headers(),
+        json={
+            "parent": {
+                "type": "data_source_id",
+                "data_source_id": _load_secret("NOTION_FEEDS_DATA_SOURCE_ID"),
+            },
+            "properties": {
+                "名稱": {"title": [{"type": "text", "text": {"content": name}}]},
+            },
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["id"]
+
+
+def _simulate_manual_upload(filename: str, data_source_id: str) -> str:
     """Creates a page with only the 音檔 file property set, exactly as a
     user manually dragging a file into Notion would leave it — no title,
     no status. Returns the new page id."""
@@ -47,7 +68,7 @@ def _simulate_manual_upload(filename: str) -> str:
         json={
             "parent": {
                 "type": "data_source_id",
-                "data_source_id": _load_secret("NOTION_DATA_SOURCE_ID"),
+                "data_source_id": data_source_id,
             },
             "properties": {
                 "音檔": {
@@ -78,10 +99,12 @@ def _archive(page_id: str) -> None:
 
 
 def test_pending_upload_is_listed_then_disappears_once_processed():
-    page_id = _simulate_manual_upload("known-sentence.m4a")
+    feed_page_id = _create_test_tracked_feed(f"測試節目-{uuid.uuid4().hex[:6]}")
+    data_source_id = get_or_create_show_database(feed_page_id, "測試節目")
+    page_id = _simulate_manual_upload("known-sentence.m4a", data_source_id)
 
     try:
-        pending = list_pending_uploads()
+        pending = list_pending_uploads(data_source_id)
         matching = [p for p in pending if p["page_id"] == page_id]
         assert len(matching) == 1
         assert matching[0]["filename"] == "known-sentence.m4a"
@@ -97,7 +120,8 @@ def test_pending_upload_is_listed_then_disappears_once_processed():
             tags=["測試"],
         )
 
-        pending_after = list_pending_uploads()
+        pending_after = list_pending_uploads(data_source_id)
         assert page_id not in [p["page_id"] for p in pending_after]
     finally:
         _archive(page_id)
+        _archive(feed_page_id)

@@ -6,12 +6,15 @@ import requests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from daily_run import run_daily
-from notion_store import _headers, _load_secret
+from notion_store import _headers, get_or_create_show_database
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+PERSONAL_AUDIO_FEED_PAGE_ID = "3b1fa664-385e-81d2-b403-c7e9224ab940"  # 個人音檔
 
 
 def _simulate_manual_upload(filename: str) -> str:
+    data_source_id = get_or_create_show_database(PERSONAL_AUDIO_FEED_PAGE_ID, "個人音檔")
+
     upload = requests.post(
         "https://api.notion.com/v1/file_uploads",
         headers=_headers(),
@@ -40,7 +43,7 @@ def _simulate_manual_upload(filename: str) -> str:
         json={
             "parent": {
                 "type": "data_source_id",
-                "data_source_id": _load_secret("NOTION_DATA_SOURCE_ID"),
+                "data_source_id": data_source_id,
             },
             "properties": {
                 "音檔": {
@@ -73,7 +76,17 @@ def _archive(page_id: str) -> None:
 def test_run_daily_also_processes_pending_personal_uploads(tmp_path, monkeypatch):
     # keep this test fast/isolated: skip the real podcast-feed sweep, only
     # exercise the personal-upload half of run_daily()
-    monkeypatch.setattr("daily_run.list_tracked_feeds", lambda: [])
+    monkeypatch.setattr(
+        "daily_run.list_tracked_feeds",
+        lambda: [
+            {
+                "page_id": PERSONAL_AUDIO_FEED_PAGE_ID,
+                "url": None,
+                "name": "個人音檔",
+                "source_type": "個人上傳",
+            }
+        ],
+    )
 
     page_id = _simulate_manual_upload("known-sentence.m4a")
 
